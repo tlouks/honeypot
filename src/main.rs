@@ -1,21 +1,19 @@
-#![allow(unused_imports)]
 #![feature(lazy_cell)]
-use std::error::Error;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-use azalea::FormattedText;
+use anyhow::{anyhow, bail as yeet, Result};
 use azalea::protocol::connect::Connection;
-use azalea::protocol::packets::ConnectionProtocol;
-use azalea::protocol::packets::handshaking::{ServerboundHandshakePacket, ClientboundHandshakePacket};
-use azalea::protocol::packets::login::{ServerboundLoginPacket, ClientboundLoginPacket};
+use azalea::protocol::packets::handshaking::{
+    ClientboundHandshakePacket, ServerboundHandshakePacket,
+};
 use azalea::protocol::packets::status::clientbound_pong_response_packet::ClientboundPongResponsePacket;
-use azalea::protocol::packets::status::{ServerboundStatusPacket, ClientboundStatusPacket};
-use azalea::protocol::packets::status::clientbound_status_response_packet::{ClientboundStatusResponsePacket as Status, Players, Version};
-use azalea::protocol::resolver;
+use azalea::protocol::packets::status::clientbound_status_response_packet::{
+    ClientboundStatusResponsePacket as Status, Players, Version,
+};
+use azalea::protocol::packets::status::{ClientboundStatusPacket, ServerboundStatusPacket};
+use azalea::protocol::packets::ConnectionProtocol;
+use azalea::FormattedText;
 use azalea_chat::text_component::TextComponent;
 use sqlx::PgPool;
-use tokio::io::AsyncReadExt;
-use tokio::net::{TcpStream, TcpListener};
-use anyhow::{Result, bail as yeet, anyhow};
+use tokio::net::{TcpListener, TcpStream};
 
 type ServerHandshakeConn = Connection<ServerboundHandshakePacket, ClientboundHandshakePacket>;
 type ServerStatusConn = Connection<ServerboundStatusPacket, ClientboundStatusPacket>;
@@ -32,7 +30,7 @@ async fn main() -> Result<()> {
         let (socket, incoming_addr) = listener.accept().await?;
         println!("[*] Got a connection from {}", incoming_addr);
         match handle_conn(socket, &pool).await {
-            Ok(_) => {},
+            Ok(_) => {}
             Err(e) => {
                 eprintln!("{e}");
                 break;
@@ -43,7 +41,7 @@ async fn main() -> Result<()> {
     Ok(())
 }
 
-pub async fn handle_conn(incoming: TcpStream, mut pool: &PgPool) -> Result<()> {
+pub async fn handle_conn(incoming: TcpStream, pool: &PgPool) -> Result<()> {
     let peer = incoming.peer_addr()?;
     let mut conn: ServerHandshakeConn = Connection::wrap(incoming);
 
@@ -51,7 +49,7 @@ pub async fn handle_conn(incoming: TcpStream, mut pool: &PgPool) -> Result<()> {
         return Ok(());
     };
 
-    db::add_entry(&mut pool, peer.ip().to_string()).await;
+    db::add_entry(pool, peer.ip().to_string()).await;
     let target = &handshake.hostname;
     println!("Saved {} {} to the db", peer, target);
     println!("[*] handshake: {:?}", handshake);
